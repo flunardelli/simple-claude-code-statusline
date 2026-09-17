@@ -4,7 +4,7 @@ A tiny, dependency-free status line for [Claude Code](https://claude.com/claude-
 Single Python file, emoji icons (no Nerd Font required).
 
 ```
-📁 my-project │ 🌿 main │ 🤖 Opus 4.8 │ 💲 0.42 │ 🔢 1.8M │ 🧠 240.6k (24%) │ ⏳ 18:00
+📁 my-project │ 🌿 main │ 🤖 Opus 5 │ 💲 76.81 │ 🔢 4476.4k │ 🧠 523.0k (52%) │ 🔋 5h 76% 7d 59% $ 37%
 ```
 
 ## What it shows
@@ -16,8 +16,13 @@ Single Python file, emoji icons (no Nerd Font required).
 | Model | 🤖 | stdin JSON (`model.display_name`) |
 | Session cost (USD) | 💲 | stdin JSON (`cost.total_cost_usd`) |
 | Session tokens | 🔢 | transcript (input + cache-creation + output) |
-| Context tokens | 🧠 | transcript (last message); color turns yellow ≥70%, red ≥90% |
-| Usage-window reset | ⏳ | **estimate**, 5h block aligned to first-use hour |
+| Context window | 🧠 | stdin JSON (`context_window`); yellow ≥70% used, red ≥90% |
+| Quota remaining | 🔋 | stdin JSON (`rate_limits`); yellow <30% left, red <10% |
+
+The 🔋 field is what you have left, not what you have spent: `5h` and `7d` are the
+rolling rate-limit windows, `$` is the spend limit when one applies to you. The whole
+field turns yellow or red on the tightest of the three, so a single glance tells you
+whether you can keep going.
 
 ## Install
 
@@ -38,17 +43,22 @@ Requires `python3` (standard library only).
 
 Top of `statusline.py`:
 
-- `CTX_LIMIT` — context window size for the `%`. Default `1_000_000`; set `200_000` for the standard context.
-- `BLOCK_HOURS` — usage-window length for the reset estimate (default `5`).
 - `IC_*` — swap any icon (emoji or your own glyph).
+- Color constants are ANSI 256; adjust to taste.
+- `CTX_LIMIT_FALLBACK` — only used by old clients that do not send
+  `context_window`. Current versions report the real window size, including the
+  1M extended context, so there is nothing to configure.
 
-## Notes
+## Fields that can be missing
 
-- **The reset time is an estimate.** Claude Code does not persist the real quota
-  reset locally (it arrives in API headers at runtime), so this uses the
-  ccusage-style 5-hour block heuristic from message timestamps. The `⏳` value is
-  approximate and computed per session.
-- Colors are ANSI 256; adjust the color constants to taste.
+The status line drops a field rather than guessing when its data is absent:
+
+- `rate_limits` is sent only to claude.ai Pro and Max subscribers, or behind a
+  gateway with a spend limit, and only after the first API response of the session.
+  Each of the three windows can be absent on its own. Needs Claude Code 2.1.251+
+  for `spend_limit`.
+- `context_window` percentages can be `null` early in a session.
+- Session tokens need a readable `transcript_path`.
 
 ## License
 

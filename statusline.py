@@ -1,28 +1,35 @@
 #!/usr/bin/env python3
-# Statusline for Claude Code. Reads JSON from stdin (model/cost) and the
-# transcript JSONL (tokens/context). No external deps.
+# Statusline for Claude Code. Reads JSON from stdin and the transcript JSONL.
+# No external deps.
 import sys, json, os
-from datetime import datetime, timedelta, timezone
 
-CTX_LIMIT = 1_000_000  # context window. Use 200_000 for the standard context.
-BLOCK_HOURS = 5        # usage window (ccusage-style estimate).
+BLOCK = " │ "
 
 # ANSI colors (tokyo-night-ish)
 def c(code, s): return f"\033[{code}m{s}\033[0m"
 BLUE, GREEN, YELLOW, MAG, GRAY, RED = "38;5;111", "38;5;150", "38;5;179", "38;5;176", "38;5;244", "38;5;174"
-SEP = c(GRAY, " │ ")
+SEP = c(GRAY, BLOCK)
 
 # Emoji icons (render without a Nerd Font). Change them here if you like.
 IC_DIR, IC_BRANCH, IC_MODEL = "📁", "🌿", "🤖"
-IC_COST, IC_TOKENS, IC_CTX, IC_RESET = "💲", "🔢", "🧠", "⏳"
+IC_COST, IC_TOKENS, IC_CTX, IC_QUOTA = "💲", "🔢", "🧠", "🔋"
+
+# Fallback only: used when the client does not send context_window.context_window_size.
+CTX_LIMIT_FALLBACK = 200_000
+
 
 def kfmt(n):
     n = int(n or 0)
-    if n >= 1000: return f"{n/1000:.1f}k"
-    return str(n)
+    return f"{n/1000:.1f}k" if n >= 1000 else str(n)
+
+
+def pct_color(remaining):
+    # remaining is what you still have, so low is bad
+    return RED if remaining < 10 else YELLOW if remaining < 30 else GREEN
+
 
 def git_branch(start):
-    # walk up until a .git is found and read the current branch, without calling git
+    # walk up until a .git is found and read the branch, without calling git
     d = start
     while d and d != "/":
         g = os.path.join(d, ".git")
@@ -45,80 +52,94 @@ def git_branch(start):
         d = os.path.dirname(d)
     return None
 
+
+def session_tokens(tpath):
+    """Cumulative tokens processed this session. Not in the stdin JSON, which
+    only reports what is currently in the context window, so read the transcript."""
+    if not tpath:
+        return None
+    total, seen = 0, False
+    try:
+        with open(tpath) as fh:
+            for line in fh:
+                try:
+                    u = (json.loads(line).get("message") or {}).get("usage")
+                except Exception:
+                    continue
+                if not u:
+                    continue
+                seen = True
+                total += (u.get("input_tokens") or 0) \
+                       + (u.get("cache_creation_input_tokens") or 0) \
+                       + (u.get("output_tokens") or 0)
+    except Exception:
+        return None
+    return total if seen else None
+
+
+def context_used(data):
+    """(tokens, percent) in the context window. Prefers the client's own numbers."""
+    cw = data.get("context_window") or {}
+    size = cw.get("context_window_size") or CTX_LIMIT_FALLBACK
+    tokens = (cw.get("total_input_tokens") or 0) + (cw.get("total_output_tokens") or 0)
+    if tokens:
+        pct = cw.get("used_percentage")
+        return tokens, (pct if pct is not None else tokens / size * 100)
+    return None, None
+
+
+def quota(data):
+    """Remaining share of each rate-limit window, in a fixed order so the
+    status line does not reshuffle as the numbers move. rate_limits is absent
+    for non-subscribers and before the first API response."""
+    rl = data.get("rate_limits") or {}
+    out = []
+    for key, label in (("five_hour", "5h"), ("seven_day", "7d"), ("spend_limit", "$")):
+        used = (rl.get(key) or {}).get("used_percentage")
+        if used is None:
+            continue
+        out.append((label, max(0.0, 100.0 - used)))
+    return out
+
+
 def main():
     try:
         data = json.load(sys.stdin)
     except Exception:
         data = {}
 
-    model = (data.get("model") or {}).get("display_name") or "?"
-    cost = (data.get("cost") or {}).get("total_cost_usd")
-    tpath = data.get("transcript_path")
-    cwd = (data.get("workspace") or {}).get("current_dir") or data.get("cwd") or ""
-
-    sess_tokens = 0
-    ctx_tokens = 0
-    first_ts = None
-    with_tp = False
-    if tpath:
-        try:
-            with open(tpath) as fh:
-                for line in fh:
-                    try:
-                        o = json.loads(line)
-                    except Exception:
-                        continue
-                    ts = o.get("timestamp")
-                    if ts and first_ts is None:
-                        try:
-                            first_ts = datetime.fromisoformat(ts.replace("Z", "+00:00"))
-                        except Exception:
-                            pass
-                    u = (o.get("message") or {}).get("usage")
-                    if not u:
-                        continue
-                    with_tp = True
-                    it = u.get("input_tokens", 0) or 0
-                    cc = u.get("cache_creation_input_tokens", 0) or 0
-                    cr = u.get("cache_read_input_tokens", 0) or 0
-                    ot = u.get("output_tokens", 0) or 0
-                    sess_tokens += it + cc + ot            # new tokens processed
-                    ctx_tokens = it + cc + cr + ot          # live context (last message)
-        except Exception:
-            pass
-
-    # estimate the usage-window reset (5h block aligned to the hour of first use)
-    reset_str = None
-    if first_ts is not None:
-        try:
-            start = first_ts.replace(minute=0, second=0, microsecond=0)
-            now = datetime.now(timezone.utc)
-            block = timedelta(hours=BLOCK_HOURS)
-            while now - start >= block:
-                start += block
-            reset_local = (start + block).astimezone()
-            reset_str = reset_local.strftime("%H:%M")
-        except Exception:
-            pass
-
     parts = []
+
+    cwd = (data.get("workspace") or {}).get("current_dir") or data.get("cwd") or ""
     if cwd:
         parts.append(c(GRAY, f"{IC_DIR} {os.path.basename(cwd)}"))
+
     br = git_branch(cwd) if cwd else None
     if br:
         parts.append(c(GREEN, f"{IC_BRANCH} {br}"))
-    parts.append(c(BLUE, f"{IC_MODEL} {model}"))
+
+    parts.append(c(BLUE, f"{IC_MODEL} {(data.get('model') or {}).get('display_name') or '?'}"))
+
+    cost = (data.get("cost") or {}).get("total_cost_usd")
     if cost is not None:
         parts.append(c(GREEN, f"{IC_COST} {cost:.2f}"))
-    if with_tp:
-        parts.append(c(YELLOW, f"{IC_TOKENS} {kfmt(sess_tokens)}"))
-        pct = (ctx_tokens / CTX_LIMIT * 100) if CTX_LIMIT else 0
-        ctx_color = RED if pct >= 90 else YELLOW if pct >= 70 else MAG
-        parts.append(c(ctx_color, f"{IC_CTX} {kfmt(ctx_tokens)} ({pct:.0f}%)"))
-    if reset_str:
-        parts.append(c(GRAY, f"{IC_RESET} {reset_str}"))
+
+    st = session_tokens(data.get("transcript_path"))
+    if st is not None:
+        parts.append(c(YELLOW, f"{IC_TOKENS} {kfmt(st)}"))
+
+    ctx, pct = context_used(data)
+    if ctx is not None:
+        col = RED if pct >= 90 else YELLOW if pct >= 70 else MAG
+        parts.append(c(col, f"{IC_CTX} {kfmt(ctx)} ({pct:.0f}%)"))
+
+    q = quota(data)
+    if q:
+        body = " ".join(f"{label} {rem:.0f}%" for label, rem in q)
+        parts.append(c(pct_color(min(rem for _, rem in q)), f"{IC_QUOTA} {body}"))
 
     sys.stdout.write(SEP.join(parts))
+
 
 if __name__ == "__main__":
     main()
