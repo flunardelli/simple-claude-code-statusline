@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-# Statusline for Claude Code. Reads JSON from stdin and the transcript JSONL.
-# No external deps.
+# Statusline for Claude Code. Reads the session JSON on stdin. No external deps,
+# no transcript parsing, no subprocesses.
 import sys, json, os
 
 BLOCK = " │ "
@@ -12,8 +12,8 @@ SEP = c(GRAY, BLOCK)
 
 # Emoji icons (render without a Nerd Font). Change them here if you like.
 IC_DIR, IC_BRANCH, IC_MODEL = "📁", "🌿", "🤖"
-IC_COST, IC_TOKENS, IC_CTX, IC_QUOTA = "💲", "🔢", "🧠", "🔋"
-IC_CACHE_WARM, IC_CACHE_COLD = "🔄", "🧊"
+IC_COST, IC_CTX, IC_QUOTA = "💲", "🧠", "🔋"
+IC_CACHE_WARM, IC_CACHE_COLD = "🔥", "🧊"
 
 # Fallback only: used when the client does not send context_window.context_window_size.
 CTX_LIMIT_FALLBACK = 200_000
@@ -52,30 +52,6 @@ def git_branch(start):
                 return None
         d = os.path.dirname(d)
     return None
-
-
-def session_tokens(tpath):
-    """Cumulative tokens processed this session. Not in the stdin JSON, which
-    only reports what is currently in the context window, so read the transcript."""
-    if not tpath:
-        return None
-    total, seen = 0, False
-    try:
-        with open(tpath) as fh:
-            for line in fh:
-                try:
-                    u = (json.loads(line).get("message") or {}).get("usage")
-                except Exception:
-                    continue
-                if not u:
-                    continue
-                seen = True
-                total += (u.get("input_tokens") or 0) \
-                       + (u.get("cache_creation_input_tokens") or 0) \
-                       + (u.get("output_tokens") or 0)
-    except Exception:
-        return None
-    return total if seen else None
 
 
 def context_used(data):
@@ -119,10 +95,10 @@ def cache(data):
             return None
         pct = hr * 100
         col = GREEN if pct >= 80 else YELLOW if pct >= 50 else RED
-        return IC_CACHE_WARM, f"{pct:.0f}%", col
+        return IC_CACHE_WARM, f"cache {pct:.0f}%", col
     # cold: the prefix left its TTL, so the next request pays to rebuild it
     tok = pc.get("recache_tokens_if_cold")
-    return IC_CACHE_COLD, (kfmt(tok) if tok else "cold"), RED
+    return IC_CACHE_COLD, ("cache " + kfmt(tok) if tok else "cache cold"), RED
 
 
 def main():
@@ -149,10 +125,6 @@ def main():
     cost = (data.get("cost") or {}).get("total_cost_usd")
     if cost is not None:
         parts.append(c(GREEN, f"{IC_COST} {cost:.2f}"))
-
-    st = session_tokens(data.get("transcript_path"))
-    if st is not None:
-        parts.append(c(YELLOW, f"{IC_TOKENS} {kfmt(st)}"))
 
     ctx, pct = context_used(data)
     if ctx is not None:
