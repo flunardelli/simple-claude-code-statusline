@@ -118,7 +118,10 @@ def main():
     if br:
         parts.append(c(GREEN, f"{IC_BRANCH} {br}"))
 
-    parts.append(c(BLUE, f"{IC_MODEL} {(data.get('model') or {}).get('display_name') or '?'}"))
+    model = (data.get("model") or {}).get("display_name") or "?"
+    # effort is only sent for models that take the reasoning-effort parameter
+    effort = (data.get("effort") or {}).get("level")
+    parts.append(c(BLUE, f"{IC_MODEL} {model}" + (f" ({effort})" if effort else "")))
 
     cost = (data.get("cost") or {}).get("total_cost_usd")
     if cost is not None:
