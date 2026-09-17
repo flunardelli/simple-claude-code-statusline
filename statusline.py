@@ -13,6 +13,7 @@ SEP = c(GRAY, BLOCK)
 # Emoji icons (render without a Nerd Font). Change them here if you like.
 IC_DIR, IC_BRANCH, IC_MODEL = "📁", "🌿", "🤖"
 IC_COST, IC_TOKENS, IC_CTX, IC_QUOTA = "💲", "🔢", "🧠", "🔋"
+IC_CACHE_WARM, IC_CACHE_COLD = "🔄", "🧊"
 
 # Fallback only: used when the client does not send context_window.context_window_size.
 CTX_LIMIT_FALLBACK = 200_000
@@ -102,6 +103,28 @@ def quota(data):
     return out
 
 
+def cache(data):
+    """(icon, text, color) for the prompt cache, or None.
+
+    Two states in one slot so the line does not change width: warm shows how
+    much of the input came from cache, cold shows what the next request will
+    re-cache. prompt_cache needs Claude Code 2.1.251+ and appears only after
+    the main conversation's first API response."""
+    pc = data.get("prompt_cache") or {}
+    if not pc.get("caching_observed"):
+        return None
+    if pc.get("warm"):
+        hr = pc.get("hit_ratio")
+        if hr is None:
+            return None
+        pct = hr * 100
+        col = GREEN if pct >= 80 else YELLOW if pct >= 50 else RED
+        return IC_CACHE_WARM, f"{pct:.0f}%", col
+    # cold: the prefix left its TTL, so the next request pays to rebuild it
+    tok = pc.get("recache_tokens_if_cold")
+    return IC_CACHE_COLD, (kfmt(tok) if tok else "cold"), RED
+
+
 def main():
     try:
         data = json.load(sys.stdin)
@@ -135,6 +158,11 @@ def main():
     if ctx is not None:
         col = RED if pct >= 90 else YELLOW if pct >= 70 else MAG
         parts.append(c(col, f"{IC_CTX} {kfmt(ctx)} ({pct:.0f}%)"))
+
+    ch = cache(data)
+    if ch:
+        icon, text, col = ch
+        parts.append(c(col, f"{icon} {text}"))
 
     q = quota(data)
     if q:

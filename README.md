@@ -4,7 +4,7 @@ A tiny, dependency-free status line for [Claude Code](https://claude.com/claude-
 Single Python file, emoji icons (no Nerd Font required).
 
 ```
-📁 my-project │ 🌿 main │ 🤖 Opus 5 (high) │ 💲 76.81 │ 🔢 4476.4k │ 🧠 523.0k (52%) │ 🔋 5h 76% 7d 59% $ 37%
+📁 my-project │ 🌿 main │ 🤖 Opus 5 (high) │ 💲 76.81 │ 🧠 565.9k (57%) │ 🔄 98% │ 🔋 5h 76% 7d 59% $ 37%
 ```
 
 ## What it shows
@@ -17,6 +17,7 @@ Single Python file, emoji icons (no Nerd Font required).
 | Session cost (USD) | 💲 | stdin JSON (`cost.total_cost_usd`) |
 | Session tokens | 🔢 | transcript (input + cache-creation + output) |
 | Context window | 🧠 | stdin JSON (`context_window`); yellow ≥70% used, red ≥90% |
+| Prompt cache | 🔄 / 🧊 | stdin JSON (`prompt_cache`); 🔄 is the share of input read from cache, 🧊 means the cache went cold and shows what the next request re-caches |
 | Quota remaining | 🔋 | stdin JSON (`rate_limits`); yellow <30% left, red <10% |
 
 The 🔋 field is what you have left, not what you have spent: `5h` and `7d` are the
@@ -57,6 +58,8 @@ The status line drops a field rather than guessing when its data is absent:
   gateway with a spend limit, and only after the first API response of the session.
   Each of the three windows can be absent on its own. Needs Claude Code 2.1.251+
   for `spend_limit`.
+- `prompt_cache` needs Claude Code 2.1.251+ and appears only after the first
+  API response of the main conversation.
 - `effort` is sent only for models that take the reasoning-effort parameter.
 - `context_window` percentages can be `null` early in a session.
 - Session tokens need a readable `transcript_path`.
