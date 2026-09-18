@@ -12,7 +12,7 @@ SEP = c(GRAY, BLOCK)
 
 # Emoji icons (render without a Nerd Font). Change them here if you like.
 IC_DIR, IC_BRANCH, IC_MODEL = "📁", "🌿", "🤖"
-IC_COST, IC_CTX, IC_QUOTA = "💲", "🧠", "📊"
+IC_COST, IC_CTX, IC_QUOTA = "💲", "🧠", "📈"
 IC_CACHE_WARM, IC_CACHE_COLD = "🔥", "🧊"
 
 # Fallback only: used when the client does not send context_window.context_window_size.
