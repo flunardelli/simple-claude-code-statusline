@@ -6,7 +6,7 @@ on stdin: no transcript parsing, no subprocesses, nothing that gets slower as a 
 grows.
 
 ```
-📁 my-project │ 🌿 main │ 🤖 Opus 5 (high) │ 💲 76.81 │ 🧠 565.9k (57%) │ 🔥 cache 98% │ 🔋 5h 76% 7d 59% $ 37%
+📁 my-project │ 🌿 main │ 🤖 Opus 5 (high) │ 💲 106.00 │ 🧠 599.5k (60%) │ 🔥 cache 98% │ 📊 5h 21% 7d 68%
 ```
 
 ## What it shows
@@ -19,16 +19,17 @@ grows.
 | Session cost (USD) | 💲 | `cost.total_cost_usd` |
 | Context window | 🧠 | `context_window`; yellow ≥70% used, red ≥90% |
 | Prompt cache | 🔥 / 🧊 | `prompt_cache`; green ≥80% hit, red when cold |
-| Quota remaining | 🔋 | `rate_limits`; yellow <30% left, red <10% |
+| Rate-limit usage | 📊 | `rate_limits`; yellow ≥50% used, red ≥80% |
 
 **🔥 and 🧊 share one slot**, so the line keeps its width. Warm shows the share of input
 served from cache, which is what explains the bill. Cold shows the tokens the next
 request has to re-cache, which is the cost spike you would otherwise notice only after
 it happened.
 
-**🔋 is what you have left, not what you have spent.** `5h` and `7d` are the rolling
-rate-limit windows, `$` is the spend limit when one applies to you. The field takes its
-colour from the tightest of the three, so one glance says whether you can keep going.
+**📊 is what you have spent**, the same direction the `/usage` command reports, so the
+two always agree. `5h` and `7d` are the rolling rate-limit windows, `$` is the spend
+limit when one applies to you. The field takes its colour from the window closest to
+its ceiling, so one glance says whether you can keep going.
 
 ## Install
 
@@ -84,6 +85,10 @@ The status line drops a field rather than guessing when its data is absent:
   running total and the other a snapshot. Dropping it also removed the only reason the
   script opened the transcript at all.
 - **`CTX_LIMIT` is no longer a setting**, since the client reports the real window size.
+- **The rate-limit field shows usage, not headroom.** It first displayed what was left,
+  which read backwards next to `/usage`: the same window showed 79 in one place and 21 in
+  the other. A number the product already publishes should not be inverted without saying
+  so, and the battery icon that went with it made the inversion look deliberate.
 
 ## License
 

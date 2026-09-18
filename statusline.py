@@ -12,7 +12,7 @@ SEP = c(GRAY, BLOCK)
 
 # Emoji icons (render without a Nerd Font). Change them here if you like.
 IC_DIR, IC_BRANCH, IC_MODEL = "📁", "🌿", "🤖"
-IC_COST, IC_CTX, IC_QUOTA = "💲", "🧠", "🔋"
+IC_COST, IC_CTX, IC_QUOTA = "💲", "🧠", "📊"
 IC_CACHE_WARM, IC_CACHE_COLD = "🔥", "🧊"
 
 # Fallback only: used when the client does not send context_window.context_window_size.
@@ -24,9 +24,9 @@ def kfmt(n):
     return f"{n/1000:.1f}k" if n >= 1000 else str(n)
 
 
-def pct_color(remaining):
-    # remaining is what you still have, so low is bad
-    return RED if remaining < 10 else YELLOW if remaining < 30 else GREEN
+def used_color(used):
+    # matches the direction of /usage: the number is what you have spent
+    return RED if used >= 80 else YELLOW if used >= 50 else GREEN
 
 
 def git_branch(start):
@@ -66,16 +66,17 @@ def context_used(data):
 
 
 def quota(data):
-    """Remaining share of each rate-limit window, in a fixed order so the
-    status line does not reshuffle as the numbers move. rate_limits is absent
-    for non-subscribers and before the first API response."""
+    """Share of each rate-limit window already used, in the same direction the
+    /usage command reports it, and in a fixed order so the status line does not
+    reshuffle as the numbers move. rate_limits is absent for non-subscribers and
+    before the first API response."""
     rl = data.get("rate_limits") or {}
     out = []
     for key, label in (("five_hour", "5h"), ("seven_day", "7d"), ("spend_limit", "$")):
         used = (rl.get(key) or {}).get("used_percentage")
         if used is None:
             continue
-        out.append((label, max(0.0, 100.0 - used)))
+        out.append((label, used))
     return out
 
 
@@ -138,8 +139,8 @@ def main():
 
     q = quota(data)
     if q:
-        body = " ".join(f"{label} {rem:.0f}%" for label, rem in q)
-        parts.append(c(pct_color(min(rem for _, rem in q)), f"{IC_QUOTA} {body}"))
+        body = " ".join(f"{label} {used:.0f}%" for label, used in q)
+        parts.append(c(used_color(max(used for _, used in q)), f"{IC_QUOTA} {body}"))
 
     sys.stdout.write(SEP.join(parts))
 
