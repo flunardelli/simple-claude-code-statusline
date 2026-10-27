@@ -6,20 +6,27 @@ on stdin: no transcript parsing, no subprocesses, nothing that gets slower as a 
 grows.
 
 ```
-📁 my-project │ 🌿 main │ 🤖 Opus 5 (high) │ 💲 106.00 │ 🧠 599.5k (60%) │ 🔥 cache 98% │ 📈 5h 21% 7d 68%
+📁 my-project │ 🌿 main │ 🤖 Opus 5 (high) │ 💲 106.00 │ 🧠 599.5k (60%)
+```
+
+With `--show-user --show-cache --show-ratelimit`:
+
+```
+👤 jane │ 📁 my-project │ 🌿 main │ 🤖 Opus 5 (high) │ 💲 106.00 │ 🧠 599.5k (60%) │ 🔥 cache 98% │ 📈 5h 21% 7d 68%
 ```
 
 ## What it shows
 
 | Field | Icon | Source |
 |-------|------|--------|
+| Account (`--show-user`) | 👤 | `oauthAccount.emailAddress` in `.claude.json`, local part only |
 | Current directory | 📁 | `workspace.current_dir` |
 | Git branch | 🌿 | reads `.git/HEAD` directly; no `git` call, supports worktrees |
 | Model and effort | 🤖 | `model.display_name`, `effort.level` |
 | Session cost (USD) | 💲 | `cost.total_cost_usd` |
 | Context window | 🧠 | `context_window`; yellow ≥70% used, red ≥90% |
-| Prompt cache | 🔥 / 🧊 | `prompt_cache`; green ≥80% hit, red when cold |
-| Rate-limit usage | 📈 | `rate_limits`; yellow ≥50% used, red ≥80% |
+| Prompt cache (`--show-cache`) | 🔥 / 🧊 | `prompt_cache`; green ≥80% hit, red when cold |
+| Rate-limit usage (`--show-ratelimit`) | 📈 | `rate_limits`; yellow ≥50% used, red ≥80% |
 
 **🔥 and 🧊 share one slot**, so the line keeps its width. Warm shows the share of input
 served from cache, which is what explains the bill. Cold shows the tokens the next
@@ -43,6 +50,16 @@ its ceiling, so one glance says whether you can keep going.
    }
    ```
 3. Restart Claude Code.
+
+The account, cache and rate-limit fields are off by default. Turn each one on with its
+flag in `command`, in any combination:
+
+```json
+"command": "python3 ~/.claude/statusline.py --show-user --show-cache --show-ratelimit"
+```
+
+`--show-user` reads `.claude.json` from `CLAUDE_CONFIG_DIR`, or from `~` when that is
+unset, so separate config dirs show their own account.
 
 Needs `python3` (standard library only), and Claude Code 2.1.251 or later for the cache
 and spend-limit fields. Older versions still work: whatever they do not send is simply
@@ -90,6 +107,8 @@ The status line drops a field rather than guessing when its data is absent:
   the other. A number the product already publishes should not be inverted without saying
   so, and the battery icon that went with it made the inversion look deliberate. The
   rising chart replaced it because it climbs as you spend, the way the number does.
+- **Cache and rate-limit are opt-in**, behind `--show-cache` and `--show-ratelimit`, and
+  `--show-user` adds the logged-in account. Without flags the line stays short.
 
 ## License
 

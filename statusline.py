@@ -14,6 +14,7 @@ SEP = c(GRAY, BLOCK)
 IC_DIR, IC_BRANCH, IC_MODEL = "📁", "🌿", "🤖"
 IC_COST, IC_CTX, IC_QUOTA = "💲", "🧠", "📈"
 IC_CACHE_WARM, IC_CACHE_COLD = "🔥", "🧊"
+IC_USER = "👤"
 
 # Fallback only: used when the client does not send context_window.context_window_size.
 CTX_LIMIT_FALLBACK = 200_000
@@ -102,6 +103,17 @@ def cache(data):
     return IC_CACHE_COLD, ("cache " + kfmt(tok) if tok else "cache cold"), RED
 
 
+def account_email():
+    # the session JSON carries no account; login state lives in .claude.json of the
+    # active config dir, which is ~ itself when CLAUDE_CONFIG_DIR is unset
+    base = os.environ.get("CLAUDE_CONFIG_DIR") or os.path.expanduser("~")
+    try:
+        with open(os.path.join(base, ".claude.json")) as f:
+            return (json.load(f).get("oauthAccount") or {}).get("emailAddress")
+    except Exception:
+        return None
+
+
 def main():
     try:
         data = json.load(sys.stdin)
@@ -109,6 +121,11 @@ def main():
         data = {}
 
     parts = []
+
+    if "--show-user" in sys.argv:
+        email = account_email()
+        if email:
+            parts.append(c(YELLOW, f"{IC_USER} {email.split('@')[0]}"))
 
     cwd = (data.get("workspace") or {}).get("current_dir") or data.get("cwd") or ""
     if cwd:
@@ -132,12 +149,12 @@ def main():
         col = RED if pct >= 90 else YELLOW if pct >= 70 else MAG
         parts.append(c(col, f"{IC_CTX} {kfmt(ctx)} ({pct:.0f}%)"))
 
-    ch = cache(data)
+    ch = cache(data) if "--show-cache" in sys.argv else None
     if ch:
         icon, text, col = ch
         parts.append(c(col, f"{icon} {text}"))
 
-    q = quota(data)
+    q = quota(data) if "--show-ratelimit" in sys.argv else None
     if q:
         body = " ".join(f"{label} {used:.0f}%" for label, used in q)
         parts.append(c(used_color(max(used for _, used in q)), f"{IC_QUOTA} {body}"))
