@@ -79,6 +79,8 @@ At the top of `statusline.py`:
 
 The status line drops a field rather than guessing when its data is absent:
 
+- The branch shows only when the session directory, or one of its parents, holds a
+  `.git`. A workspace folder that groups several repos without being one shows none.
 - `rate_limits` reaches only claude.ai Pro and Max subscribers, or sessions behind a
   gateway that sets a spend limit, and only after the session's first API response.
   Each of the three windows can be absent on its own.
